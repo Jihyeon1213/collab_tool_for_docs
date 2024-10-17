@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useUserStore } from '../store';
 import { auth, db } from '../firebase';
-import { ref, onValue, remove } from 'firebase/database';
+import { ref, onValue, remove, update } from 'firebase/database';
 import CreateDocumentModal from './CreateDocumentModal';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Header from './Header';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -11,7 +11,9 @@ const DocumentList = () => {
   const [documentList, setDocumentList] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editDocumentId, setEditDocumentId] = useState(null); 
   const { user, setUser } = useUserStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     onAuthStateChanged(auth, (user) => {
@@ -25,22 +27,26 @@ const DocumentList = () => {
   }, [setUser]);
 
   useEffect(() => {
-    if (!user) return;
-    const uid = user.uid;
+    if (!user) return; 
 
-    onValue(ref(db, '/users/' + uid), (snapshot) => {
+    onValue(ref(db, '/users/'), (snapshot) => {
       const data = snapshot.val();
+  
       if (data) {
-        const documentList = Object.keys(data).map((documentKey) => ({
-          id: documentKey,
-          title: data[documentKey].title,
-        }));
-        setDocumentList(documentList);
+        const userDocuments = Object.keys(data)
+          .filter(documentKey => data[documentKey].ownerUid === user.uid) 
+          .map(documentKey => ({
+            id: documentKey,
+            title: data[documentKey].title,
+          }));
+  
+        setDocumentList(userDocuments); 
       } else {
-        setDocumentList([]);
+        setDocumentList([]); 
       }
     });
   }, [user]);
+  
 
   const handleCreateDocument = () => {
     setIsModalOpen(true);
@@ -50,10 +56,25 @@ const DocumentList = () => {
     setIsModalOpen(false);
   };
 
-  const handleDeleteDocument = (documentId) => {
-    const uid = user.uid;
+  const handleEditTitle = (documentId) => {
+    setEditDocumentId(documentId); 
+  };
 
-    remove(ref(db, '/users/' + uid + '/' + documentId));
+  const handleTitleChange = (e, documentId) => {
+    const newTitle = e.target.value;
+    const updatedDocuments = documentList.map((doc) =>
+      doc.id === documentId ? { ...doc, title: newTitle } : doc
+    );
+    setDocumentList(updatedDocuments); 
+
+    if (user) {
+      const documentRef = ref(db, '/users/' + documentId);
+      update(documentRef, { title: newTitle }); 
+    }
+  };
+
+  const handleDeleteDocument = (documentId) => {
+    remove(ref(db, '/users/'+ documentId));
     setDocumentList((prevDocuments) => prevDocuments.filter(doc => doc.id !== documentId));
   };
 
@@ -62,6 +83,7 @@ const DocumentList = () => {
   }
 
   if (!user) {
+    setTimeout(() => navigate('/'), 2000);
     return <h2>문서 목록을 보려면 로그인 해주세요!</h2>
   }
 
@@ -73,8 +95,21 @@ const DocumentList = () => {
       <ul>
         {documentList.map((document) => (
           <li key={document.id}>
-            <Link to={`/edit/${document.id}`}>{document.title}</Link>
-            <button onClick={() => handleDeleteDocument(document.id)}>삭제</button>
+            {editDocumentId === document.id ? (
+              <>
+              <input
+                value={document.title}
+                onChange={(e) => handleTitleChange(e, document.id)}
+              />
+              <button onClick={() => setEditDocumentId(null)}>확인</button>
+              </>
+            ) : (
+              <>
+              <Link to={`/edit/${document.id}`}>{document.title}</Link>
+              <button onClick={() => handleEditTitle(document.id)}>제목 수정</button>
+              <button onClick={() => handleDeleteDocument(document.id)}>삭제</button>           
+              </>
+            )}
           </li>
         ))}
       </ul>
@@ -86,4 +121,5 @@ const DocumentList = () => {
 };
 
 export default DocumentList;
+
 
