@@ -23,7 +23,7 @@ const LoginPage = () => {
   useEffect(()=> {
     if(user) {
       setLoading(true);
-      setTimeout(()=>navigate('/documents'), 800);      
+      setTimeout(() => navigate('/documents'), 800);      
     }
   },[navigate, user])
 
@@ -33,7 +33,7 @@ const LoginPage = () => {
       provider.setCustomParameters({
         prompt: "select_account",
       });
-      
+
       const result = await signInWithPopup(auth, provider);
       setUser(result.user); 
       navigate('/documents');
